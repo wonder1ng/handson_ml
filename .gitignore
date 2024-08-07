@@ -21,3 +21,8 @@ datasets/titanic
 datasets/words
 datasets/jsb_chorales
 
+original/
+__pycache__/
+*.py[cod]
+*$py.class
+.idea
