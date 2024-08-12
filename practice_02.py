@@ -1,325 +1,622 @@
-# 2징
+# 3장
+from sklearn.datasets import fetch_openml
 import numpy as np
-import pandas as pd
 
-housing = pd.read_csv('original/datasets/housing/housing.csv')
-housing.info()
+mnist = fetch_openml('mnist_784', version=1, as_frame=False)
+print(mnist.keys())
+X, y = mnist['data'], mnist['target'].astype(np.uint8)
+print(X.shape, y.shape)
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-housing.hist(bins=50, figsize=(20, 15))
+
+some_digit = X[0]
+some_digit_image = some_digit.reshape(28, 28)
+
+plt.imshow(some_digit_image, cmap='binary')
+plt.axis('off')
+print(y[0])
 plt.show(block=False)
 plt.pause(2)
 plt.close()
+X_train, X_test, y_train, y_test = X[:60000], X[60000:], y[:60000], y[60000:]
+y_train_5 = (y_train == 5)
+y_test_5 = (y_test == 5)
+from sklearn.linear_model import SGDClassifier
 
-from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
+sgd_clf = SGDClassifier(random_state=42)
+sgd_clf.fit(X_train, y_train_5)
+sgd_clf.predict([some_digit])
+from sklearn.model_selection import StratifiedKFold
+from sklearn.base import clone  # 모델의 학습 결과는 복제하지 않음
 
-housing.reset_index()
-train_set, test_set = train_test_split(housing.reset_index(), test_size=0.2, random_state=42)
+skfolds = StratifiedKFold(n_splits=3, random_state=42, shuffle=True)
 
-from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
+for train_index, test_index in skfolds.split(X_train, y_train_5):
+    clone_clf = clone(sgd_clf)
+    X_train_folds = X_train[train_index]
+    y_train_folds = y_train_5[train_index]
+    X_test_folds = X_train[test_index]
+    y_test_folds = y_train_5[test_index]
 
-housing['income_cat'] = pd.cut(housing['median_income'],
-                               bins=[0, 1.5, 3, 4.5, 6, np.inf],
-                               labels=[1,2,3,4,5])
-
-train_set, test_set = train_test_split(housing.reset_index(), test_size=0.2, random_state=42)
-split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-for train_index, test_index in split.split(housing, housing['income_cat']):
-    start_train_set = housing.loc[train_index]
-    start_test_set = housing.loc[test_index]
-
-housing = start_train_set.copy()
-housing.plot(kind='scatter', x='longitude', y='latitude', alpha=0.4,
-             s=housing['population']/100, label='population', figsize=(10, 7),
-             c='median_house_value', cmap='jet', colorbar=True,
-             sharex=False)
-plt.legend()
-plt.show(block=False)
-plt.pause(2)
-plt.close()
-
-corr_matrix = housing.corr(numeric_only=True)
-corr_matrix['median_house_value'].sort_values(ascending=False)
-from pandas.plotting import scatter_matrix
-
-attributes = ['median_house_value', 'median_income', 'total_rooms', 'housing_median_age']
-scatter_matrix(housing[attributes], figsize=(12,8))
-plt.show(block=False)
-plt.pause(2)
-plt.close()
-
-housing.plot(kind='scatter', x='median_income', y='median_house_value', alpha=0.1)
-plt.show(block=False)
-plt.pause(2)
-plt.close()
-
-housing['rooms_per_household'] = housing['total_rooms']/housing['households']
-housing['bedrooms_per_room'] = housing['total_bedrooms']/housing['total_rooms']
-housing['population_per_household'] = housing['population']/housing['households']
-
-corr_matrix = housing.corr(numeric_only=True)
-corr_matrix['median_house_value'].sort_values(ascending=False)
-
-housing = start_train_set.drop('median_house_value', axis=1)
-housing_labels = start_train_set['median_house_value'].copy()
-
-
-from sklearn.impute import SimpleImputer
-
-imputer = SimpleImputer(strategy='median')
-housing_num = housing.drop('ocean_proximity', axis=1)
-imputer.fit(housing_num)
-imputer.statistics_ # 각 열별 중앙값
-
-X = imputer.transform(housing_num)
-housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
-
-
-from sklearn.preprocessing import OneHotEncoder
-
-housing_cat = housing[['ocean_proximity']]
-
-cat_encoder = OneHotEncoder()
-housing_cat_1hot = cat_encoder.fit_transform(housing_cat)
-
-from sklearn.base import BaseEstimator, TransformerMixin
-
-rooms_ix, bedrooms_ix, population_ix, housholds_ix = 3, 4, 5, 6
-
-
-class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
-    def __init__(self, add_bedrooms_per_room=True) -> None:
-        self.add_bedrooms_per_room = add_bedrooms_per_room
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        rooms_per_household = X[:, rooms_ix] / X[:, housholds_ix]
-        population_per_househod = X[:, population_ix] / X[:, housholds_ix]
-        if self.add_bedrooms_per_room:
-            bedrooms_per_room = X[:, bedrooms_ix] / X[:, housholds_ix]
-            return np.c_[X, rooms_per_household, population_per_househod, bedrooms_per_room]
-        else:
-            return np.c_[X, rooms_per_household, population_per_househod]
-
-
-attr_adder = CombinedAttributesAdder(add_bedrooms_per_room=False)
-housing_extra_attribs = attr_adder.transform(housing.values)
-
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-
-num_pipeline = Pipeline([
-    ('imputer', SimpleImputer(strategy='median')),
-    ('attribs_adder', CombinedAttributesAdder()),
-    ('std_scaler', StandardScaler())
-])
-
-housing_num_tr = num_pipeline.fit_transform(housing_num)
-
-
-from sklearn.compose import ColumnTransformer
-
-num_attribs = list(housing_num)
-cat_attribs = ['ocean_proximity']
-
-full_pipeline = ColumnTransformer([
-    ('num', num_pipeline, num_attribs),
-    ('cat', OneHotEncoder(), cat_attribs)
-])
-
-housing_prepared = full_pipeline.fit_transform(housing)
-
-
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
-
-lin_reg = LinearRegression()
-lin_reg.fit(housing_prepared, housing_labels)
-
-some_data = housing.iloc[:5]
-some_labels = housing_labels.iloc[:5]
-
-some_data_prepared = full_pipeline.transform(some_data)
-print("예측:", lin_reg.predict(some_data_prepared))
-print('레이블:', list(some_labels))
-
-housing_predictions = lin_reg.predict(housing_prepared)
-lin_mse = mean_squared_error(housing_labels, housing_predictions)
-lin_rmse = np.sqrt(lin_mse)
-print(lin_rmse)
-
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import mean_squared_error
-
-tree_reg = DecisionTreeRegressor()
-tree_reg.fit(housing_prepared, housing_labels)
-print("예측:", tree_reg.predict(some_data_prepared))
-print('레이블:', list(some_labels))
-
-housing_predictions = tree_reg.predict(housing_prepared)
-tree_mse = mean_squared_error(housing_labels, housing_predictions)
-tree_rmse = np.sqrt(tree_mse)
-print(tree_rmse)
-
-
+    clone_clf.fit(X_train_folds, y_train_folds)
+    y_pred = clone_clf.predict(X_test_folds)
+    n_correct = sum(y_pred == y_test_folds)
+    print(n_correct / len(y_pred))
 from sklearn.model_selection import cross_val_score
 
-def display_scores(scores):
-    print("점수:", scores)
-    print("평균:", scores.mean())
-    print("표준편차:", scores.std())
-
-scores = cross_val_score(tree_reg, housing_prepared, housing_labels, scoring='neg_mean_squared_error', cv=10)
-tree_rmse_scores = np.sqrt(-scores)
-display_scores(tree_rmse_scores)
-
-print('='*20)
-
-scores = cross_val_score(lin_reg, housing_prepared, housing_labels, scoring='neg_mean_squared_error', cv=10)
-lin_rmse_scores = np.sqrt(-scores)
-display_scores(lin_rmse_scores)
+print(cross_val_score(sgd_clf, X_train, y_train_5, cv=3, scoring='accuracy'))
+from sklearn.base import BaseEstimator
 
 
-from sklearn.ensemble import RandomForestRegressor
-
-forest_reg = RandomForestRegressor()
-forest_reg.fit(housing_prepared, housing_labels)
-print("예측:", forest_reg.predict(some_data_prepared))
-print('레이블:', list(some_labels))
-
-housing_predictions = forest_reg.predict(housing_prepared)
-forest_mse = mean_squared_error(housing_labels, housing_predictions)
-forest_rmse = np.sqrt(forest_mse)
-print(forest_rmse)
-
-scores = cross_val_score(forest_reg, housing_prepared, housing_labels, scoring='neg_mean_squared_error', cv=10)
-forest_rmse_scores = np.sqrt(-scores)
-display_scores(forest_rmse_scores)
-
-
-from sklearn.model_selection import GridSearchCV
-
-param_grid = [
-    {'n_estimators': [3, 10, 30], 'max_features': [2, 4, 6, 8]},
-    {'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3, 4]}
-]
-
-forest_reg = RandomForestRegressor()
-
-grid_search = GridSearchCV(forest_reg, param_grid, cv=5,
-                           scoring='neg_mean_squared_error',
-                           return_train_score=True, error_score='raise')
-
-grid_search.fit(housing_prepared, housing_labels)
-cvres = grid_search.cv_results_
-for mean_score, parmas in sorted(zip(cvres['mean_test_score'], cvres['params']), reverse=True):
-    print(np.sqrt(-mean_score), parmas)
-
-
-feature_importances = grid_search.best_estimator_.feature_importances_
-extra_attribs = ['rooms_per_hhold', 'pop_per_hhold', 'bedrooms_per_room']
-cat_encoder = full_pipeline.named_transformers_['cat']
-cat_one_hot_attribs = list(cat_encoder.categories_[0])
-attributes = num_attribs + extra_attribs + cat_one_hot_attribs
-sorted(zip(feature_importances, attributes), reverse=True)
-
-
-from scipy import stats
-
-final_model = grid_search.best_estimator_
-
-X_test = start_test_set.drop('median_house_value', axis=1)
-y_test = start_test_set['median_house_value'].copy()
-
-X_test_prepared = full_pipeline.transform(X_test)
-final_predictions = final_model.predict(X_test_prepared)
-
-final_mse = mean_squared_error(y_test, final_predictions)
-final_rmse = np.sqrt(final_mse)
-
-
-confidence = 0.95
-squared_erros = (final_predictions - y_test)**2
-print(np.sqrt(stats.t.interval(confidence, len(squared_erros)-1,
-                         loc=squared_erros.mean(),
-                         scale=stats.sem(squared_erros))))
-
-from sklearn.svm import SVR
-from sklearn.model_selection import RandomizedSearchCV
-
-param_grid = {
-    'kernel': ['linear', 'rbf'],
-    'C': np.logspace(-3, 3, 7),
-    'gamma': ['scale', 'auto'] + np.logspace(-3, 3, 7).tolist()
-    }
-
-svr = SVR()
-
-random_search = RandomizedSearchCV(
-    estimator=svr,
-    param_distributions=param_grid,
-    n_iter=100,
-    cv=5,
-    verbose=1,
-    n_jobs=-1,
-    random_state=42
-)
-
-
-random_search.fit(housing_prepared, housing_labels)
-
-from sklearn.base import BaseEstimator, TransformerMixin
-
-
-class SelectBestFeatures(BaseEstimator, TransformerMixin):
-    def __init__(self, feature_importances, k) -> None:
-        self.feature_importances = feature_importances
-        self.k = k
-
+class Never5Classifier(BaseEstimator):
     def fit(self, X, y=None):
-        self.best_feature_idces = np.argsort(self.feature_importances)[-k:]
         return self
 
-    def transform(self, X):
-        print(self.best_feature_idces)
-        return X[:, self.best_feature_idces]
+    def predict(self, X):
+        return np.zeros((len(X), 1), dtype=bool)
 
 
-k = 5
-select_feature_pipeline = Pipeline([
-    ('preparation', full_pipeline),
-    ('feature_selection', SelectBestFeatures(feature_importances, k))
+never_5_clf = Never5Classifier()
+print(cross_val_score(never_5_clf, X_train, y_train_5, cv=3, scoring='accuracy'))
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import confusion_matrix
+
+y_train_pred = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3)
+print(confusion_matrix(y_train_5, y_train_pred))
+from sklearn.metrics import f1_score
+
+print(f1_score(y_train_5, y_train_pred))
+y_scores = sgd_clf.decision_function([some_digit])
+print(y_scores)
+threshold = 0
+y_some_digit_pred = (y_scores > threshold)
+y_some_digit_pred
+from sklearn.metrics import precision_recall_curve
+
+y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3, method='decision_function')
+precisions, recalls, thresholds = precision_recall_curve(y_train_5, y_scores)
+
+
+def plot_precision_recall_vs_threshold(precisions, recalls, thresholds):
+    plt.figure(figsize=(8, 4))
+    plt.plot(thresholds, precisions[:-1], 'b--', label='precision')
+    plt.plot(thresholds, recalls[:-1], 'g--', label='recall')
+    plt.legend(loc="center right", fontsize=16)  # Not shown in the book
+    plt.xlabel("Threshold", fontsize=16)  # Not shown
+    plt.grid(True)  # Not shown
+    plt.axis([-50000, 50000, 0, 1])  # Not shown
+
+
+plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+from sklearn.metrics import precision_recall_curve
+
+y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3, method='decision_function')
+precisions, recalls, thresholds = precision_recall_curve(y_train_5, y_scores)
+
+
+def plot_precision_recall_vs_threshold(precisions, recalls, thresholds):
+    plt.figure(figsize=(8, 4))
+    plt.plot(thresholds, precisions[:-1], 'b--', label='precision')
+    plt.plot(thresholds, recalls[:-1], 'g--', label='recall')
+    # plt.legend(loc="center right", fontsize=16) # Not shown in the book
+    # plt.xlabel("Threshold", fontsize=16)        # Not shown
+    # plt.grid(True)                              # Not shown
+    # plt.axis([-50000, 50000, 0, 1])             # Not shown
+
+
+plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+from sklearn.metrics import precision_score, recall_score
+
+threshold_90_precision = thresholds[np.argmax(precisions >= 0.9)]
+y_train_pred_90 = (y_scores >= threshold_90_precision)
+print(precision_score(y_train_5, y_train_pred_90))
+print(recall_score(y_train_5, y_train_pred_90))
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+
+fpr, tpr, thresholds = roc_curve(y_train_5, y_scores)
+
+
+def plot_roc_curve(fpr, tpr, label=None):
+    plt.plot(fpr, tpr, linewidth=2, label=label)
+    plt.plot([0, 1], [0, 1], 'k--')
+
+
+plot_roc_curve(fpr, tpr)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+
+print(roc_auc_score(y_train_5, y_scores))
+from sklearn.ensemble import RandomForestClassifier
+
+forest_clf = RandomForestClassifier(random_state=42)
+y_probas_forest = cross_val_predict(forest_clf, X_train, y_train_5, cv=3, method='predict_proba')
+y_scores_forest = y_probas_forest[:, 1]
+fpr_forest, tpr_forest, thresholds_forest = roc_curve(y_train_5, y_scores_forest)
+
+plt.plot(fpr, tpr, 'b:', label='SGD')
+plot_roc_curve(fpr_forest, tpr_forest, 'Random Forest')
+plt.legend(loc='lower right')
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+
+print(roc_auc_score(y_train_5, y_scores_forest))
+from sklearn.svm import SVC
+
+svm_clf = SVC()
+svm_clf.fit(X_train, y_train)
+print(svm_clf.predict([some_digit]))
+
+some_digit_scores = svm_clf.decision_function([some_digit])
+print(some_digit_scores)
+some_digit_scores = svm_clf.decision_function([some_digit])
+print(some_digit_scores)
+svm_clf.classes_[np.argmax(some_digit_scores)]
+from sklearn.multiclass import OneVsRestClassifier
+
+ovr_clf = OneVsRestClassifier(SVC(), n_jobs=-1)
+ovr_clf.fit(X_train, y_train)
+print(ovr_clf.predict([some_digit]))
+print(ovr_clf.estimators_)
+print(len(ovr_clf.estimators_))
+sgd_clf.fit(X_train, y_train)
+print(sgd_clf.predict([some_digit]))
+print(sgd_clf.decision_function([some_digit]))
+print(cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring='accuracy'))
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train.astype(np.float64))
+print(cross_val_score(sgd_clf, X_train_scaled, y_train, cv=3, scoring='accuracy'))
+y_train_pred = cross_val_predict(sgd_clf, X_train_scaled, y_train, cv=3)
+conf_mx = confusion_matrix(y_train, y_train_pred)
+print(conf_mx)
+plt.matshow(conf_mx, cmap=plt.cm.gray)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+row_sums = conf_mx.sum(axis=1, keepdims=True)
+norm_conf_mx = conf_mx / row_sums
+print(row_sums)
+print(norm_conf_mx)
+np.fill_diagonal(norm_conf_mx, 0)
+plt.matshow(norm_conf_mx, cmap=plt.cm.gray)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+
+
+# 숫자 그림을 위한 추가 함수
+def plot_digits(instances, images_per_row=10, **options):
+    size = 28
+    images_per_row = min(len(instances), images_per_row)
+    # n_rows = int(len(instances) / images_per_row) 와 동일합니다:
+    n_rows = (len(instances) - 1) // images_per_row + 1
+
+    # 필요하면 그리드 끝을 채우기 위해 빈 이미지를 추가합니다:
+    n_empty = n_rows * images_per_row - len(instances)
+    padded_instances = np.concatenate([instances, np.zeros((n_empty, size * size))], axis=0)
+
+    # 배열의 크기를 바꾸어 28×28 이미지를 담은 그리드로 구성합니다:
+    image_grid = padded_instances.reshape((n_rows, images_per_row, size, size))
+
+    # 축 0(이미지 그리드의 수직축)과 2(이미지의 수직축)를 합치고 축 1과 3(두 수평축)을 합칩니다.
+    # 먼저 transpose()를 사용해 결합하려는 축을 옆으로 이동한 다음 합칩니다:
+    big_image = image_grid.transpose(0, 2, 1, 3).reshape(n_rows * size,
+                                                         images_per_row * size)
+    # 하나의 큰 이미지를 얻었으므로 출력하면 됩니다:
+    plt.imshow(big_image, cmap=mpl.cm.binary, **options)
+    plt.axis("off")
+
+
+cl_a, cl_b = 3, 5
+X_aa = X_train[(y_train == cl_a) & (y_train_pred == cl_a)]
+X_ab = X_train[(y_train == cl_a) & (y_train_pred == cl_b)]
+X_ba = X_train[(y_train == cl_b) & (y_train_pred == cl_a)]
+X_bb = X_train[(y_train == cl_b) & (y_train_pred == cl_b)]
+
+plt.figure(figsize=(8, 8))
+for idx, arr in enumerate([X_aa, X_ab, X_ba, X_bb], 221):
+    plt.subplot(idx)
+    plot_digits(arr[:25], images_per_row=5)
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+from sklearn.neighbors import KNeighborsClassifier
+
+y_train_large = (y_train >= 7)
+y_train_odd = (y_train % 2 == 1)
+y_multilabel = np.c_[y_train_large, y_train_odd]
+knn_clf = KNeighborsClassifier()
+knn_clf.fit(X_train, y_multilabel)
+print(knn_clf.predict([some_digit]))
+y_train_knn_pred = cross_val_predict(knn_clf, X_train, y_multilabel, cv=3)
+print(f1_score(y_multilabel, y_train_knn_pred, average='macro'))
+noise = np.random.randint(0, 100, (len(X_train), 784))
+X_train_mod = X_train + noise
+noise = np.random.randint(0, 100, (len(X_test), 784))
+X_test_mod = X_test + noise
+y_train_mod = X_train
+y_test_mod = X_test
+
+
+def plot_digit(data):
+    image = data.reshape(28, 28)
+    plt.imshow(image, cmap=mpl.cm.binary,
+               interpolation="nearest")
+    plt.axis("off")
+
+
+some_index = 0
+
+knn_clf.fit(X_train_mod, y_train_mod)
+clean_digit = knn_clf.predict([X_test_mod[some_index]])
+plot_digit(clean_digit)
+## 연습문제 구현
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+
+knn_clf = KNeighborsClassifier()
+
+params = {'n_neighbors': [3, 4, 5], 'weights': ['uniform', 'distance']}
+
+X_train_pr = X_train[:len(X_train) // 10]
+y_train_pr = y_train[:len(y_train) // 10]
+
+grid_search = GridSearchCV(knn_clf, params, cv=5,
+                           scoring='accuracy', n_jobs=-1,
+                           return_train_score=True, error_score='raise')
+
+grid_search.fit(X_train_pr, y_train_pr)
+del X_train_pr, y_train_pr
+params = {'n_neighbors': [grid_search.best_estimator_.__dict__['n_neighbors']],
+          'weights': [grid_search.best_estimator_.__dict__['weights']]}
+
+grid_search = GridSearchCV(knn_clf, params, cv=5,
+                           scoring='accuracy', n_jobs=-1,
+                           return_train_score=True, error_score='raise')
+
+grid_search.fit(X_train, y_train)
+from sklearn.metrics import accuracy_score
+
+print(grid_search.best_params_, grid_search.best_score_)
+y_pred = grid_search.predict(X_test)
+print(accuracy_score(y_test, y_pred))
+
+
+def set_expansion(X_data: np.array) -> np.array:
+    X_data = X_data.reshape(-1, 28, 28)
+    res = [arr[1:] + arr[:1] for arr in map(list, X_data)]
+    res += [arr[-1:] + arr[:-1] for arr in map(list, X_data)]
+    res += [np.array(arr[1:] + arr[:1]).T for arr in map(list, map(np.transpose, X_data))]
+    res += [np.array(arr[-1:] + arr[:-1]).T for arr in map(list, map(np.transpose, X_data))]
+    return np.array(res).reshape(-1, 28 * 28)
+
+
+X_train_exp = set_expansion(X_train)
+y_train_exp = np.concatenate([y_train, y_train, y_train, y_train])
+image = X_train[0]
+
+plt.figure(figsize=(12, 3))
+plt.subplot(131)
+plt.title("Original", fontsize=14)
+plt.imshow(image.reshape(28, 28), interpolation="nearest", cmap="Greys")
+plt.subplot(132)
+plt.title("Shifted down", fontsize=14)
+plt.imshow(X_train_exp[60000].reshape(28, 28), interpolation="nearest", cmap="Greys")
+plt.subplot(133)
+plt.title("Shifted left", fontsize=14)
+plt.imshow(X_train_exp[120000].reshape(28, 28), interpolation="nearest", cmap="Greys")
+plt.show()
+params = {'n_neighbors': [grid_search.best_estimator_.__dict__['n_neighbors']],
+          'weights': [grid_search.best_estimator_.__dict__['weights']]}
+
+grid_search = GridSearchCV(knn_clf, params, cv=5,
+                           scoring='accuracy', n_jobs=-1,
+                           return_train_score=True, error_score='raise')
+
+# grid_search.fit(X_train_exp, y_train_exp)
+
+idx_list = list([range(i * 10000, (i + 2) * 10000) for i in [0, 6, 12, 18]])
+X_train_exp_80k = X_train_exp[idx_list]
+y_train_exp_80k = y_train_exp[idx_list]
+grid_search.fit(X_train_exp_80k, y_train_exp_80k)
+
+print(grid_search.best_params_, grid_search.best_score_)
+y_pred = grid_search.predict(X_test)
+print(accuracy_score(y_test, y_pred))
+import pandas as pd
+import numpy as np
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import classification_report
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+import warnings
+
+warnings.filterwarnings('ignore')
+
+train = pd.read_csv('./original/datasets/titanic/train.csv')
+test = pd.read_csv('./original/datasets/titanic/test.csv')
+train.info()
+use_cols = ['Pclass', 'Sex', 'Age', 'SibSp', 'Fare', 'Embarked']
+X_train = train[use_cols]
+X_train.Age = X_train.Age.fillna(X_train.Age.mean()).apply(lambda x: int(x * 0.1))
+X_test = test[use_cols]
+X_test.Age = X_test.Age.fillna(X_train.Age.mean()).apply(lambda x: int(x * 0.1))
+
+y_train = train['Survived']
+cat_list = ['Age', 'Sex', 'Embarked', 'Pclass']
+num_list = ['Pclass', 'SibSp', 'Fare']
+
+cat_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
 ])
-res = select_feature_pipeline.fit_transform(housing)
 
-
-select_feature_pipeline = Pipeline([
-    ('preparation', full_pipeline),
-    ('feature_selection', SelectBestFeatures(feature_importances, k)),
-    ('svr', SVR(**random_search.best_params_))
+pipeline = ColumnTransformer([
+    ('num', SimpleImputer(strategy='mean'), num_list),
+    ('cat', cat_pipeline, cat_list)
 ])
-select_feature_pipeline.fit(housing, housing_labels)
+
+label_encoder = LabelEncoder()
+y_train_prepared = label_encoder.fit_transform(y_train)
+X_train_prepared = pipeline.fit_transform(X_train)
+X_test_prepared = pipeline.transform(X_test)
+rfc = RandomForestClassifier()
+
+param_grid = {'n_estimators': [3, 10, 30, 50, 100],
+              'max_features': [2, 4, 6, 8, 10, 12, 15, 20, 30, 50]}
+
+grid_search = GridSearchCV(rfc, param_grid, cv=5,
+                           scoring='accuracy',
+                           return_train_score=True, error_score='raise')
+grid_search.fit(X_train_prepared, y_train_prepared)
+print(grid_search.best_params_)
+print(classification_report(y_train_prepared, grid_search.best_estimator_.predict(X_train_prepared)))
+### 4번 문제는 풀이에 있는 코드를 분석하는 것으로 대체
+import os
+import tarfile
+import urllib.request
+
+DOWNLOAD_ROOT = "http://spamassassin.apache.org/old/publiccorpus/"
+HAM_URL = DOWNLOAD_ROOT + "20030228_easy_ham.tar.bz2"
+SPAM_URL = DOWNLOAD_ROOT + "20030228_spam.tar.bz2"
+SPAM_PATH = os.path.join('original', "datasets", "spam")
 
 
-some_data = housing.iloc[:4]
-some_labels = housing_labels.iloc[:4]
+def fetch_spam_data(ham_url=HAM_URL, spam_url=SPAM_URL, spam_path=SPAM_PATH):
+    if not os.path.isdir(spam_path):
+        os.makedirs(spam_path)
+    for filename, url in (("ham.tar.bz2", ham_url), ("spam.tar.bz2", spam_url)):
+        path = os.path.join(spam_path, filename)
+        if not os.path.isfile(path):
+            urllib.request.urlretrieve(url, path)
+            # url의 정보를 path에 저장
+        tar_bz2_file = tarfile.open(path)
+        tar_bz2_file.extractall(path=spam_path)
+        tar_bz2_file.close()
 
-print("Predictions:\t", select_feature_pipeline.predict(some_data))
-print("Labels:\t\t", list(some_labels))
+
+fetch_spam_data()
+
+HAM_DIR = os.path.join(SPAM_PATH, "easy_ham")
+SPAM_DIR = os.path.join(SPAM_PATH, "spam")
+ham_filenames = [name for name in sorted(os.listdir(HAM_DIR)) if len(name) > 20]
+spam_filenames = [name for name in sorted(os.listdir(SPAM_DIR)) if len(name) > 20]
+import email
+import email.policy
 
 
-full_pipeline.named_transformers_["cat"].handle_unknown = 'ignore'
-# full_pipeline에 있는 'cat'이라고 명명한 OneHotEncoder의 handle_unknown 인자에 'ignore' 할당
+def load_email(is_spam, filename, spam_path=SPAM_PATH):
+    directory = "spam" if is_spam else "easy_ham"
+    with open(os.path.join(spam_path, directory, filename), "rb") as f:
+        return email.parser.BytesParser(policy=email.policy.default).parse(f)
+        # 바이트 형식의 이메일을 파싱하여 반환
 
-param_grid = [{
-    'preparation__num__imputer__strategy': ['mean', 'median', 'most_frequent'],
-    'feature_selection__k': list(range(1, len(feature_importances) + 1))
-}]
 
-grid_search_prep = GridSearchCV(select_feature_pipeline, param_grid, cv=5,
-                                scoring='neg_mean_squared_error', verbose=2)
-grid_search_prep.fit(housing, housing_labels)
+ham_emails = [load_email(is_spam=False, filename=name) for name in ham_filenames]
+spam_emails = [load_email(is_spam=True, filename=name) for name in spam_filenames]
 
-print(grid_search_prep.best_params_)
+
+def get_email_structure(email):
+    if isinstance(email, str):
+        return email
+    payload = email.get_payload()
+    if isinstance(payload, list):
+        return "multipart({})".format(", ".join([
+            get_email_structure(sub_email)
+            for sub_email in payload
+        ]))
+    else:
+        return email.get_content_type()
+    # 이메일 구성 형식 반환
+
+
+from collections import Counter
+
+
+def structures_counter(emails):
+    structures = Counter()
+    for email in emails:
+        structure = get_email_structure(email)
+        structures[structure] += 1
+    return structures
+    # 이메일 구성 형식 비율 확인용 함수
+    # 이를 통해 ham과 spam의 구성 형식 비교 가능
+
+
+print(structures_counter(ham_emails).most_common())
+print(structures_counter(spam_emails).most_common())
+for header, value in spam_emails[0].items():
+    print(header, ":", value)
+print(spam_emails[0]["Subject"])
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+X = np.array(ham_emails + spam_emails, dtype=object)
+y = np.array([0] * len(ham_emails) + [1] * len(spam_emails))
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+import re
+from html import unescape
+
+
+def html_to_plain_text(html):
+    # 구성 형식이 html일 경우 태그 정보 제거하고 텍스트만 반환
+    text = re.sub('<head.*?>.*?</head>', '', html, flags=re.M | re.S | re.I)
+    # - re.M: 멀티라인 모드, ^와 $가 각 줄의 시작과 끝을 의미.
+    # - re.S: 점(.)이 개행 문자(\n)를 포함한 모든 문자와 매칭.
+    # - re.I: 대소문자를 구분하지 않음.
+
+    text = re.sub('<a\s.*?>', ' HYPERLINK ', text, flags=re.M | re.S | re.I)
+    text = re.sub('<.*?>', '', text, flags=re.M | re.S)
+    text = re.sub(r'(\s*\n)+', '\n', text, flags=re.M | re.S)
+    return unescape(text)  # unescape: html 이스케이프 문자를 일반 문자로 변환
+
+
+html_spam_emails = [email for email in X_train[y_train == 1]
+                    if get_email_structure(email) == "text/html"]
+sample_html_spam = html_spam_emails[7]
+print(sample_html_spam.get_content().strip()[:1000], "...")
+print(html_to_plain_text(sample_html_spam.get_content())[:1000], "...")
+
+
+def email_to_text(email):
+    html = None
+    for part in email.walk():
+        ctype = part.get_content_type()
+        if not ctype in ("text/plain", "text/html"):
+            continue
+        try:
+            content = part.get_content()
+        except:  # in case of encoding issues
+            content = str(part.get_payload())
+        if ctype == "text/plain":
+            return content
+        else:
+            html = content
+
+    if html:
+        return html_to_plain_text(html)
+
+
+print(email_to_text(sample_html_spam)[:100], "...")
+import urlextract
+
+url_extractor = urlextract.URLExtract()
+print(url_extractor.find_urls("Will it detect github.com and https://youtu.be/7Pq-S557XQU?t=3m32s"))
+from sklearn.base import BaseEstimator, TransformerMixin
+from nltk import PorterStemmer
+
+stemmer = PorterStemmer()
+
+
+class EmailToWordCounterTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, strip_headers=True, lower_case=True, remove_punctuation=True,
+                 replace_urls=True, replace_numbers=True, stemming=True):
+        self.strip_headers = strip_headers
+        self.lower_case = lower_case
+        self.remove_punctuation = remove_punctuation
+        self.replace_urls = replace_urls
+        self.replace_numbers = replace_numbers
+        self.stemming = stemming
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X_transformed = []
+        for email in X:
+            text = email_to_text(email) or ""  # 텍스트 추출
+            if self.lower_case:
+                text = text.lower()
+
+            if self.replace_urls and url_extractor is not None:  # 하이퍼링크는 전부 "URL"로 처리
+                urls = list(set(url_extractor.find_urls(text)))
+                urls.sort(key=lambda url: len(url), reverse=True)
+                for url in urls:
+                    text = text.replace(url, " URL ")
+            if self.replace_numbers:  # 숫자는 전부 NUMBER 처리
+                text = re.sub(r'\d+(?:\.\d*)?(?:[eE][+-]?\d+)?', 'NUMBER', text)
+            if self.remove_punctuation:
+                text = re.sub(r'\W+', ' ', text, flags=re.M)
+            word_counts = Counter(text.split())
+            if self.stemming and stemmer is not None:
+                stemmed_word_counts = Counter()
+                for word, count in word_counts.items():
+                    stemmed_word = stemmer.stem(word)
+                    stemmed_word_counts[stemmed_word] += count
+                word_counts = stemmed_word_counts
+            X_transformed.append(word_counts)
+        return np.array(X_transformed)
+
+
+X_few = X_train[:3]
+X_few_wordcounts = EmailToWordCounterTransformer().fit_transform(X_few)
+print(X_few_wordcounts)
+from scipy.sparse import csr_matrix  # 희소 행렬 함수
+
+
+class WordCounterToVectorTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, vocabulary_size=1000):
+        self.vocabulary_size = vocabulary_size
+
+    def fit(self, X, y=None):
+        total_count = Counter()
+        for word_count in X:
+            for word, count in word_count.items():
+                total_count[word] += min(count, 10)
+        most_common = total_count.most_common()[:self.vocabulary_size]
+        self.vocabulary_ = {word: index + 1 for index, (word, count) in enumerate(most_common)}
+        return self
+
+    def transform(self, X, y=None):
+        rows = []
+        cols = []
+        data = []
+        for row, word_count in enumerate(X):
+            for word, count in word_count.items():
+                rows.append(row)
+                cols.append(self.vocabulary_.get(word, 0))
+                data.append(count)
+        return csr_matrix((data, (rows, cols)), shape=(len(X), self.vocabulary_size + 1))
+        # csr_matrix(값, (행좌표, 열좌표), shape)
+
+
+from sklearn.pipeline import Pipeline
+
+preprocess_pipeline = Pipeline([
+    ("email_to_wordcount", EmailToWordCounterTransformer()),
+    ("wordcount_to_vector", WordCounterToVectorTransformer()),
+])
+
+X_train_transformed = preprocess_pipeline.fit_transform(X_train)
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+
+log_clf = LogisticRegression(solver="lbfgs", max_iter=1000, random_state=42)
+score = cross_val_score(log_clf, X_train_transformed, y_train, cv=3, verbose=3)
+print(score.mean())
+from sklearn.metrics import precision_score, recall_score
+
+X_test_transformed = preprocess_pipeline.transform(X_test)
+
+log_clf = LogisticRegression(solver="lbfgs", max_iter=1000, random_state=42)
+log_clf.fit(X_train_transformed, y_train)
+
+y_pred = log_clf.predict(X_test_transformed)
+
+print("정밀도: {:.2f}%".format(100 * precision_score(y_test, y_pred)))
+print("재현율: {:.2f}%".format(100 * recall_score(y_test, y_pred)))
