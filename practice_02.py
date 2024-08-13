@@ -22,11 +22,15 @@ plt.close()
 X_train, X_test, y_train, y_test = X[:60000], X[60000:], y[:60000], y[60000:]
 y_train_5 = (y_train == 5)
 y_test_5 = (y_test == 5)
+
+
 from sklearn.linear_model import SGDClassifier
 
 sgd_clf = SGDClassifier(random_state=42)
 sgd_clf.fit(X_train, y_train_5)
 sgd_clf.predict([some_digit])
+
+
 from sklearn.model_selection import StratifiedKFold
 from sklearn.base import clone  # 모델의 학습 결과는 복제하지 않음
 
@@ -43,11 +47,14 @@ for train_index, test_index in skfolds.split(X_train, y_train_5):
     y_pred = clone_clf.predict(X_test_folds)
     n_correct = sum(y_pred == y_test_folds)
     print(n_correct / len(y_pred))
+
+
 from sklearn.model_selection import cross_val_score
 
 print(cross_val_score(sgd_clf, X_train, y_train_5, cv=3, scoring='accuracy'))
-from sklearn.base import BaseEstimator
 
+
+from sklearn.base import BaseEstimator
 
 class Never5Classifier(BaseEstimator):
     def fit(self, X, y=None):
@@ -59,11 +66,15 @@ class Never5Classifier(BaseEstimator):
 
 never_5_clf = Never5Classifier()
 print(cross_val_score(never_5_clf, X_train, y_train_5, cv=3, scoring='accuracy'))
+
+
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import confusion_matrix
 
 y_train_pred = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3)
 print(confusion_matrix(y_train_5, y_train_pred))
+
+
 from sklearn.metrics import f1_score
 
 print(f1_score(y_train_5, y_train_pred))
@@ -72,6 +83,8 @@ print(y_scores)
 threshold = 0
 y_some_digit_pred = (y_scores > threshold)
 y_some_digit_pred
+
+
 from sklearn.metrics import precision_recall_curve
 
 y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3, method='decision_function')
@@ -92,6 +105,8 @@ plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
 plt.show(block=False)
 plt.pause(2)
 plt.close()
+
+
 from sklearn.metrics import precision_recall_curve
 
 y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3, method='decision_function')
@@ -112,12 +127,16 @@ plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
 plt.show(block=False)
 plt.pause(2)
 plt.close()
+
+
 from sklearn.metrics import precision_score, recall_score
 
 threshold_90_precision = thresholds[np.argmax(precisions >= 0.9)]
 y_train_pred_90 = (y_scores >= threshold_90_precision)
 print(precision_score(y_train_5, y_train_pred_90))
 print(recall_score(y_train_5, y_train_pred_90))
+
+
 from sklearn.metrics import roc_curve
 from sklearn.metrics import roc_auc_score
 
@@ -135,6 +154,8 @@ plt.pause(2)
 plt.close()
 
 print(roc_auc_score(y_train_5, y_scores))
+
+
 from sklearn.ensemble import RandomForestClassifier
 
 forest_clf = RandomForestClassifier(random_state=42)
@@ -150,6 +171,8 @@ plt.pause(2)
 plt.close()
 
 print(roc_auc_score(y_train_5, y_scores_forest))
+
+
 from sklearn.svm import SVC
 
 svm_clf = SVC()
@@ -161,6 +184,8 @@ print(some_digit_scores)
 some_digit_scores = svm_clf.decision_function([some_digit])
 print(some_digit_scores)
 svm_clf.classes_[np.argmax(some_digit_scores)]
+
+
 from sklearn.multiclass import OneVsRestClassifier
 
 ovr_clf = OneVsRestClassifier(SVC(), n_jobs=-1)
@@ -172,6 +197,8 @@ sgd_clf.fit(X_train, y_train)
 print(sgd_clf.predict([some_digit]))
 print(sgd_clf.decision_function([some_digit]))
 print(cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring='accuracy'))
+
+
 from sklearn.preprocessing import StandardScaler
 
 scaler = StandardScaler()
@@ -231,6 +258,8 @@ for idx, arr in enumerate([X_aa, X_ab, X_ba, X_bb], 221):
 plt.show(block=False)
 plt.pause(2)
 plt.close()
+
+
 from sklearn.neighbors import KNeighborsClassifier
 
 y_train_large = (y_train >= 7)
@@ -261,6 +290,8 @@ some_index = 0
 knn_clf.fit(X_train_mod, y_train_mod)
 clean_digit = knn_clf.predict([X_test_mod[some_index]])
 plot_digit(clean_digit)
+
+
 ## 연습문제 구현
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import GridSearchCV
@@ -278,14 +309,16 @@ grid_search = GridSearchCV(knn_clf, params, cv=5,
 
 grid_search.fit(X_train_pr, y_train_pr)
 del X_train_pr, y_train_pr
-params = {'n_neighbors': [grid_search.best_estimator_.__dict__['n_neighbors']],
-          'weights': [grid_search.best_estimator_.__dict__['weights']]}
+params = {k: [v] for k, v in grid_search.best_params_.items()}
 
 grid_search = GridSearchCV(knn_clf, params, cv=5,
                            scoring='accuracy', n_jobs=-1,
                            return_train_score=True, error_score='raise')
 
 grid_search.fit(X_train, y_train)
+
+
+
 from sklearn.metrics import accuracy_score
 
 print(grid_search.best_params_, grid_search.best_score_)
@@ -316,9 +349,10 @@ plt.imshow(X_train_exp[60000].reshape(28, 28), interpolation="nearest", cmap="Gr
 plt.subplot(133)
 plt.title("Shifted left", fontsize=14)
 plt.imshow(X_train_exp[120000].reshape(28, 28), interpolation="nearest", cmap="Greys")
-plt.show()
-params = {'n_neighbors': [grid_search.best_estimator_.__dict__['n_neighbors']],
-          'weights': [grid_search.best_estimator_.__dict__['weights']]}
+plt.show(block=False)
+plt.pause(2)
+plt.close()
+
 
 grid_search = GridSearchCV(knn_clf, params, cv=5,
                            scoring='accuracy', n_jobs=-1,
@@ -327,13 +361,16 @@ grid_search = GridSearchCV(knn_clf, params, cv=5,
 # grid_search.fit(X_train_exp, y_train_exp)
 
 idx_list = list([range(i * 10000, (i + 2) * 10000) for i in [0, 6, 12, 18]])
-X_train_exp_80k = X_train_exp[idx_list]
-y_train_exp_80k = y_train_exp[idx_list]
+X_train_exp_80k = X_train_exp[idx_list].reshape(-1,784)
+y_train_exp_80k = y_train_exp[idx_list].flatten()
 grid_search.fit(X_train_exp_80k, y_train_exp_80k)
 
 print(grid_search.best_params_, grid_search.best_score_)
 y_pred = grid_search.predict(X_test)
 print(accuracy_score(y_test, y_pred))
+
+
+
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
@@ -385,6 +422,9 @@ grid_search = GridSearchCV(rfc, param_grid, cv=5,
 grid_search.fit(X_train_prepared, y_train_prepared)
 print(grid_search.best_params_)
 print(classification_report(y_train_prepared, grid_search.best_estimator_.predict(X_train_prepared)))
+
+
+
 ### 4번 문제는 풀이에 있는 코드를 분석하는 것으로 대체
 import os
 import tarfile
@@ -415,6 +455,8 @@ HAM_DIR = os.path.join(SPAM_PATH, "easy_ham")
 SPAM_DIR = os.path.join(SPAM_PATH, "spam")
 ham_filenames = [name for name in sorted(os.listdir(HAM_DIR)) if len(name) > 20]
 spam_filenames = [name for name in sorted(os.listdir(SPAM_DIR)) if len(name) > 20]
+
+
 import email
 import email.policy
 
@@ -462,6 +504,8 @@ print(structures_counter(spam_emails).most_common())
 for header, value in spam_emails[0].items():
     print(header, ":", value)
 print(spam_emails[0]["Subject"])
+
+
 import numpy as np
 from sklearn.model_selection import train_test_split
 
@@ -469,6 +513,8 @@ X = np.array(ham_emails + spam_emails, dtype=object)
 y = np.array([0] * len(ham_emails) + [1] * len(spam_emails))
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
 import re
 from html import unescape
 
@@ -513,6 +559,8 @@ def email_to_text(email):
 
 
 print(email_to_text(sample_html_spam)[:100], "...")
+
+
 import urlextract
 
 url_extractor = urlextract.URLExtract()
@@ -566,8 +614,9 @@ class EmailToWordCounterTransformer(BaseEstimator, TransformerMixin):
 X_few = X_train[:3]
 X_few_wordcounts = EmailToWordCounterTransformer().fit_transform(X_few)
 print(X_few_wordcounts)
-from scipy.sparse import csr_matrix  # 희소 행렬 함수
 
+
+from scipy.sparse import csr_matrix  # 희소 행렬 함수
 
 class WordCounterToVectorTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, vocabulary_size=1000):
@@ -603,12 +652,16 @@ preprocess_pipeline = Pipeline([
 ])
 
 X_train_transformed = preprocess_pipeline.fit_transform(X_train)
+
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 
 log_clf = LogisticRegression(solver="lbfgs", max_iter=1000, random_state=42)
 score = cross_val_score(log_clf, X_train_transformed, y_train, cv=3, verbose=3)
 print(score.mean())
+
+
 from sklearn.metrics import precision_score, recall_score
 
 X_test_transformed = preprocess_pipeline.transform(X_test)
