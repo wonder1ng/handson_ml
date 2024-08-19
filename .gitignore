@@ -28,3 +28,7 @@ __pycache__/
 .idea
 *.h5
 *.ckpt
+*.png
+*.jpg
+*.jpeg
+board/
