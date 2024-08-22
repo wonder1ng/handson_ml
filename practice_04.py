@@ -345,7 +345,7 @@ from tensorflow import keras
 
 
 def get_run_logdir(idx):
-    return os.path.join(os.getcwd(), 'board', f'run_{idx:02}')
+    return os.path.join(os.getcwd(), 'my_board', f'run_{idx:02}')
 
 
 (X_train_full, y_train_full), (X_test_full, y_test_full) = keras.datasets.cifar10.load_data()

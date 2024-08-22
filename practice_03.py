@@ -321,10 +321,10 @@ model = WideAndDeepModel()
 model.compile(loss="mse", loss_weights=[0.9, 0.1], optimizer=keras.optimizers.SGD(learning_rate=1e-3))
 
 # 텐서보드 콜백
-tensornoard_cb = keras.callbacks.TensorBoard(run_logdir)
+tensorboard_cb = keras.callbacks.TensorBoard(run_logdir)
 history = model.fit((X_train_A, X_train_B), (y_train, y_train), batch_size=1028, epochs=30,
                     validation_data=((X_valid_A, X_valid_B), (y_valid, y_valid)),
-                    callbacks=[tensornoard_cb])
+                    callbacks=[tensorboard_cb])
 
 
 test_logdir = get_run_logdir()
